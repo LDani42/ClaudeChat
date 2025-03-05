@@ -29,42 +29,46 @@ st.markdown("""
     }
     .stTextArea textarea {min-height: 100px;}
     
-    /* Fixed layout for chat */
-    .chat-outer-container {
-        display: flex;
-        flex-direction: column;
-        height: 85vh;
-        margin-bottom: 1rem;
-        border-radius: 8px;
-        background-color: rgba(40, 40, 40, 0.2);
-        overflow: hidden;
-    }
-    
-    .messages-scroll-container {
-        flex-grow: 1;
-        overflow-y: auto;
-        padding: 1rem;
-        scroll-behavior: smooth;
-    }
-    
-    .chat-input-fixed-container {
-        position: sticky;
-        bottom: 0;
-        background-color: rgba(30, 30, 30, 0.7);
-        backdrop-filter: blur(10px);
-        padding: 1rem;
-        border-top: 1px solid rgba(100, 100, 100, 0.2);
-        z-index: 100;
-    }
-    
-    /* Message styling */
-    .chat-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 0.75rem;
-        max-width: 90%;
-        word-wrap: break-word;
-    }
+.chat-outer-container {
+    display: flex;
+    flex-direction: column;
+    height: 70vh; /* Reduced from 85vh to 70vh */
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    background-color: rgba(40, 40, 40, 0.2);
+    overflow: hidden;
+}
+
+/* Make sure messages stay at the bottom when few messages */
+.messages-scroll-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+/* Make chat input container smaller and more compact */
+.chat-input-fixed-container {
+    position: sticky;
+    bottom: 0;
+    background-color: rgba(30, 30, 30, 0.7);
+    backdrop-filter: blur(10px);
+    padding: 0.5rem 1rem; /* Reduced padding */
+    border-top: 1px solid rgba(100, 100, 100, 0.2);
+    z-index: 100;
+}
+
+/* Make chat messages more compact */
+.chat-message {
+    padding: 0.75rem; /* Reduced from 1rem */
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem; /* Reduced from 0.75rem */
+    max-width: 90%;
+    word-wrap: break-word;
+}
     
     /* Dark mode friendly colors */
     .user-message {
