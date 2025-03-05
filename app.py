@@ -180,7 +180,8 @@ if st.session_state.scratchpad_visible and scratchpad_col is not None:
 
 # Footer
 st.divider()
-st.caption("Custom Claude UI - Built with Streamlit")import streamlit as st
+st.caption("Custom Claude UI - Built with Streamlit")
+import streamlit as st
 import anthropic
 import os
 import json
