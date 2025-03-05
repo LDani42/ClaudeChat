@@ -23,124 +23,47 @@ st.set_page_config(
 # Styles - updated for fixed chat input and scrollable message pane
 st.markdown("""
 <style>
-.main .block-container {
-    padding-top: 1rem;
-    max-width: 100%;
-    padding-left: 1rem;
-    padding-right: 1rem;
-}
-
-/* Make sure the chat container fills the space */
-.chat-outer-container {
-    display: flex;
-    flex-direction: column;
-    height: 70vh;
-    margin-bottom: 1rem;
-    border-radius: 8px;
-    background-color: rgba(40, 40, 40, 0.2);
-    overflow: hidden;
-    width: 100%; /* Make sure it takes full width */
-}
-
-/* Fix the layout of columns */
-[data-testid="column"] {
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* Make sure there's no gap between sidebar and main content */
-[data-testid="stSidebar"] {
-    margin-right: 0 !important;
-}
-
-/* Fill any empty space in the chat panel */
-.chat-panel {
-    width: 100%;
-    padding: 0;
-}
-
-/* Ensure stAppViewContainer takes up the full width */
-[data-testid="stAppViewContainer"] > section {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-}
-
-/* Streamlit container tweaks to avoid wasted space */
-.stChatInputContainer {
-    padding-bottom: 10px !important;
-    padding-top: 5px !important;
-}
-
-/* Add this to ensure proper flex layout */
-.row-widget.stChatInput {
-    flex: 1;
-    width: 100%;
-}
-
-
-/* Make sure messages stay at the bottom when few messages */
-.messages-scroll-container {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    scroll-behavior: smooth;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-}
-
-/* Make chat input container smaller and more compact */
-.chat-input-fixed-container {
-    position: sticky;
-    bottom: 0;
-    background-color: rgba(30, 30, 30, 0.7);
-    backdrop-filter: blur(10px);
-    padding: 0.5rem 1rem; /* Reduced padding */
-    border-top: 1px solid rgba(100, 100, 100, 0.2);
-    z-index: 100;
-}
-
-/* Make chat messages more compact */
-.chat-message {
-    padding: 0.75rem; /* Reduced from 1rem */
-    border-radius: 0.5rem;
-    margin-bottom: 0.5rem; /* Reduced from 0.75rem */
-    max-width: 90%;
-    word-wrap: break-word;
-}
+    .main .block-container {
+        padding-top: 1rem;
+        max-width: 100%;
+    }
     
-    /* Dark mode friendly colors */
+    /* Chat container - simplified */
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+        background-color: rgba(40, 40, 40, 0.2);
+        border-radius: 8px;
+        margin-bottom: 15px;
+        min-height: 400px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    
+    /* Message styling */
     .user-message {
+        align-self: flex-end;
         background-color: #2a4b8d;
-        margin-left: auto;
-        color: #ffffff !important;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 15px 15px 0 15px;
+        max-width: 80%;
+        margin: 5px 0;
     }
     
     .assistant-message {
+        align-self: flex-start;
         background-color: #2d3748;
-        margin-right: auto;
-        color: #ffffff !important;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 15px 15px 15px 0;
+        max-width: 80%;
+        margin: 5px 0;
     }
     
-    /* File upload styling */
-    .file-upload {
-        border: 2px dashed #ccc;
-        border-radius: 5px;
-        padding: 10px;
-        text-align: center;
-    }
-    
-    .file-attachment-icon {
-        position: absolute;
-        left: 10px;
-        bottom: 10px;
-        font-size: 20px;
-        cursor: pointer;
-        color: rgba(180, 180, 180, 0.8);
-        z-index: 100;
-    }
-    
-    /* File chips styling */
+    /* File chip styling */
     .file-chip {
         display: inline-block;
         background-color: rgba(100, 100, 100, 0.3);
@@ -149,55 +72,8 @@ st.markdown("""
         margin: 4px;
         font-size: 12px;
     }
-    
-    /* Split screen layout */
-    .chat-panel {
-        flex: 7;
-        padding-right: 1rem;
-    }
-    
-    .scratchpad-panel {
-        flex: 3;
-        background-color: rgba(40, 40, 40, 0.2);
-        border-radius: 0.5rem;
-        padding: 1rem;
-        height: calc(100vh - 80px);
-        overflow-y: auto;
-        position: sticky;
-        top: 0;
-    }
-    
-    .collapse-button {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-    }
-    
-    /* Chart container */
-    .chart-container {
-        background-color: rgba(40, 40, 40, 0.2);
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-    
-    /* Other styling */
-    h1, h2, h3 {margin-top: 0;}
-    
-    /* Streamlit component overrides */
-    .stChatInputContainer {
-        padding-bottom: 20px;
-        padding-top: 10px;
-    }
-    
-    /* Auto-scrolling support */
-    #auto-scroll-anchor {
-        float: left;
-        clear: both;
-        height: 0;
-    }
 </style>
+""", unsafe_allow_html=True)
 
 <script>
     // Auto-scroll function to keep messages at the bottom
@@ -592,117 +468,88 @@ else:
     chat_col = st.container()
     scratchpad_col = None
 
-# Chat interface
+# Chat interface - simplified and direct
 with chat_col:
     st.subheader("Chat with Claude")
     
-    # Create a container for the entire chat area
+    # Display messages in a more direct way
     chat_container = st.container()
-    
     with chat_container:
-        # Create a fixed layout for chat with message history in a scrollable container
-        st.markdown('<div class="chat-outer-container">', unsafe_allow_html=True)
+        # Create a div for messages
+        messages_html = '<div class="chat-container">'
         
-        # Scrollable messages container
-        st.markdown('<div class="messages-scroll-container">', unsafe_allow_html=True)
-        
-        # Display messages
+        # Add each message to the HTML
         for msg in st.session_state.messages:
             if msg["role"] == "user":
-                st.markdown(f"""
-                    <div class="chat-message user-message">
-                        <p><strong>You:</strong></p>
-                        <p>{msg["content"]}</p>
-                    </div>
-                """, unsafe_allow_html=True)
+                messages_html += f'''
+                <div class="user-message">
+                    <strong>You:</strong><br>
+                    {msg["content"]}
+                </div>
+                '''
             else:
-                st.markdown(f"""
-                    <div class="chat-message assistant-message">
-                        <p><strong>Claude:</strong></p>
-                    </div>
-                """, unsafe_allow_html=True)
-                st.write(msg["content"])
+                messages_html += f'''
+                <div class="assistant-message">
+                    <strong>Claude:</strong><br>
+                    {msg["content"]}
+                </div>
+                '''
         
-        # Add an empty div at the bottom to allow auto-scrolling
-        st.markdown('<div id="auto-scroll-anchor"></div>', unsafe_allow_html=True)
+        # Close the chat container
+        messages_html += '</div>'
         
-        # Close the messages container
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Fixed input container at the bottom
-        st.markdown('<div class="chat-input-fixed-container">', unsafe_allow_html=True)
-        
-        # Toggle button for scratchpad
-        if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
-            toggle_scratchpad()
-        
-        # File uploader with drag & drop support
-        st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
-        st.markdown('<div class="file-attachment-icon">📎</div>', unsafe_allow_html=True)
-        
-        uploaded_files = st.file_uploader("", 
-                                        accept_multiple_files=True, 
-                                        type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"],
-                                        label_visibility="collapsed")
-        
-        # Process uploaded files
-        active_file_ids = []
-        if uploaded_files:
-            file_display = st.empty()
-            with file_display.container():
-                # Display uploaded files as chips
-                file_chips_html = '<div style="margin-bottom: 10px;">'
-                
-                for uploaded_file in uploaded_files:
-                    file_id = handle_uploaded_file(uploaded_file)
-                    if file_id:
-                        active_file_ids.append(file_id)
-                        file_data = st.session_state.file_buffer[file_id]
-                        file_chips_html += f'<span class="file-chip">{file_data["name"]}</span>'
-                
-                file_chips_html += '</div>'
-                st.markdown(file_chips_html, unsafe_allow_html=True)
-        
-        # Chat input
-        user_input = st.chat_input("Message Claude...")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-# Process user input
-if user_input:
-    # Add message to UI display
-    st.session_state.messages.append({"role": "user", "content": user_input})
+        # Render the HTML
+        st.markdown(messages_html, unsafe_allow_html=True)
     
-    # Debug info
-    if active_file_ids:
-        print(f"Active file IDs: {active_file_ids}")
-        for file_id in active_file_ids:
-            print(f"File details: {st.session_state.file_buffer[file_id]['name']}")
+    # File uploader
+    uploaded_files = st.file_uploader("Upload files", 
+                                    accept_multiple_files=True, 
+                                    type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"])
     
-    # Create message for Claude API with file attachments
-    claude_message = create_claude_message(user_input, active_file_ids)
+    # Process uploaded files with a simple approach
+    active_file_ids = []
+    if uploaded_files:
+        file_display = st.empty()
+        with file_display.container():
+            st.write("Files attached:")
+            for uploaded_file in uploaded_files:
+                file_id = handle_uploaded_file(uploaded_file)
+                if file_id:
+                    active_file_ids.append(file_id)
+                    file_data = st.session_state.file_buffer[file_id]
+                    st.write(f"- {file_data['name']} ({file_data['size']} bytes)")
     
-    # Prepare messages for Claude API
-    api_messages = []
-    for i, msg in enumerate(st.session_state.messages):
-        # For all messages except the last user message, add them as is
-        if i < len(st.session_state.messages) - 1 or msg["role"] != "user":
-            api_messages.append(msg)
-        else:
-            # Replace the last user message with the one that includes files
-            api_messages.append(claude_message)
+    # Chat input
+    user_input = st.chat_input("Message Claude...")
     
-    # Call Claude API
-    with st.status("Claude is thinking..."):
-        response = query_claude(
-            api_messages,
-            selected_model,
-            system_prompt,
-            temperature,
-            max_tokens
-        )
-
+    # Process user input
+    if user_input:
+        # Add message to UI display
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        
+        # Create message for Claude API with file attachments
+        claude_message = create_claude_message(user_input, active_file_ids)
+        
+        # Prepare messages for Claude API
+        api_messages = []
+        for i, msg in enumerate(st.session_state.messages):
+            # For all messages except the last user message, add them as is
+            if i < len(st.session_state.messages) - 1 or msg["role"] != "user":
+                api_messages.append(msg)
+            else:
+                # Replace the last user message with the one that includes files
+                api_messages.append(claude_message)
+        
+        # Call Claude API
+        with st.status("Claude is thinking..."):
+            response = query_claude(
+                api_messages,
+                selected_model,
+                system_prompt,
+                temperature,
+                max_tokens
+            )
+        
         if response:
             assistant_message = response.content[0].text
             st.session_state.messages.append({"role": "assistant", "content": assistant_message})
@@ -712,21 +559,18 @@ if user_input:
             for i, block in enumerate(code_blocks):
                 name = f"code_snippet_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
                 add_to_scratchpad(name, "code", block)
-                st.info(f"Added code snippet to scratchpad: {name}")
             
             # Extract tables and add to scratchpad
             tables = extract_tables(assistant_message)
             for i, table in enumerate(tables):
                 name = f"table_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
                 add_to_scratchpad(name, "table", table)
-                st.info(f"Added table to scratchpad: {name}")
-                
+            
             # Also add the entire response as a note
             if len(assistant_message) > 0:
                 note_name = f"note_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 add_to_scratchpad(note_name, "text", assistant_message)
-                st.info(f"Added assistant response to scratchpad: {note_name}")
-            
+        
         # Rerun to update the UI
         st.rerun()
 
