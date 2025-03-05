@@ -204,13 +204,24 @@ def create_claude_message(message_text, file_ids=None):
 
 # Function to parse and extract code from Claude's responses
 def extract_code_blocks(text):
-    code_pattern = r'```(\w*)\n(.*?)```'
+    # Improved regex pattern to better match code blocks
+    code_pattern = r'```([\w\+\#\-\.]*)\s*\n(.*?)```'
     matches = re.findall(code_pattern, text, re.DOTALL)
     
     code_blocks = []
     for lang, code in matches:
+        # Default to text if language is empty, otherwise clean up language name
+        language = lang.strip().lower() if lang.strip() else "text"
+        # Map common language aliases
+        if language in ["py", "python3"]:
+            language = "python"
+        elif language in ["js", "jsx"]:
+            language = "javascript"
+        elif language in ["ts", "typescript"]:
+            language = "typescript"
+        
         code_blocks.append({
-            "language": lang.strip() if lang.strip() else "text",
+            "language": language,
             "code": code.strip()
         })
     
@@ -218,8 +229,8 @@ def extract_code_blocks(text):
 
 # Function to extract tables from responses
 def extract_tables(text):
-    # Simple markdown table pattern
-    table_pattern = r'\|.*\|.*\n\|[-:| ]+\|\n(\|.*\|.*\n)+'
+    # Improved markdown table pattern with better matching
+    table_pattern = r'(\|.*\|.*\n\|[-:| ]+\|\n(?:\|.*\|.*\n)+)'
     matches = re.findall(table_pattern, text, re.DOTALL)
     
     tables = []
@@ -341,12 +352,20 @@ with chat_col:
             for i, block in enumerate(code_blocks):
                 name = f"code_snippet_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
                 add_to_scratchpad(name, "code", block)
+                st.info(f"Added code snippet to scratchpad: {name}")
             
             # Extract tables and add to scratchpad
             tables = extract_tables(assistant_message)
             for i, table in enumerate(tables):
                 name = f"table_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
                 add_to_scratchpad(name, "table", table)
+                st.info(f"Added table to scratchpad: {name}")
+                
+            # Also add the entire response as a note
+            if len(assistant_message) > 0:
+                note_name = f"note_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                add_to_scratchpad(note_name, "text", assistant_message)
+                st.info(f"Added assistant response to scratchpad: {note_name}")
 
     # Display chat messages
     for msg in st.session_state.messages:
