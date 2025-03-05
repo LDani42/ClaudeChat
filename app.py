@@ -339,7 +339,6 @@ def handle_uploaded_file(uploaded_file):
     st.session_state.file_buffer[file_id] = file_data
     return file_id
 
-# Function to create Claude message with file attachments
 def create_claude_message(message_text, file_ids=None):
     if not file_ids:
         return {"role": "user", "content": message_text}
@@ -364,7 +363,13 @@ def create_claude_message(message_text, file_ids=None):
             elif 'text_content' in file_data and file_data['text_content']:
                 message_content.append({
                     "type": "text",
-                    "text": f"Content of file {file_data['name']}:\n\n{file_data['text_content']}"
+                    "text": f"\n\nFile: {file_data['name']}\n\n{file_data['text_content']}"
+                })
+            # For other files that could not be directly processed, notify in the message
+            else:
+                message_content.append({
+                    "type": "text",
+                    "text": f"\n\nFile attached: {file_data['name']} (size: {file_data['size']} bytes, type: {file_data['type']})"
                 })
     
     return {"role": "user", "content": message_content}
@@ -621,30 +626,40 @@ with chat_col:
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Process user input
-    if user_input:
-        # Create message for UI display
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        
-        # Create message for Claude API with file attachments
-        claude_message = create_claude_message(user_input, active_file_ids)
-        
-        # Prepare messages for API
-        api_messages = [m for m in st.session_state.messages if m["role"] != "system"]
-        # Replace the last user message with the one that includes files
-        if api_messages and api_messages[-1]["role"] == "user":
-            api_messages[-1] = claude_message
-        
-        # Call Claude API
-        with st.status("Claude is thinking..."):
-            response = query_claude(
-                api_messages,
-                selected_model,
-                system_prompt,
-                temperature,
-                max_tokens
-            )
-        
+# Process user input
+if user_input:
+    # Add message to UI display
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    
+    # Debug info
+    if active_file_ids:
+        print(f"Active file IDs: {active_file_ids}")
+        for file_id in active_file_ids:
+            print(f"File details: {st.session_state.file_buffer[file_id]['name']}")
+    
+    # Create message for Claude API with file attachments
+    claude_message = create_claude_message(user_input, active_file_ids)
+    
+    # Prepare messages for Claude API
+    api_messages = []
+    for i, msg in enumerate(st.session_state.messages):
+        # For all messages except the last user message, add them as is
+        if i < len(st.session_state.messages) - 1 or msg["role"] != "user":
+            api_messages.append(msg)
+        else:
+            # Replace the last user message with the one that includes files
+            api_messages.append(claude_message)
+    
+    # Call Claude API
+    with st.status("Claude is thinking..."):
+        response = query_claude(
+            api_messages,
+            selected_model,
+            system_prompt,
+            temperature,
+            max_tokens
+        )
+
         if response:
             assistant_message = response.content[0].text
             st.session_state.messages.append({"role": "assistant", "content": assistant_message})
