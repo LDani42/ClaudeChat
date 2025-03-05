@@ -276,7 +276,11 @@ def toggle_scratchpad():
     st.rerun()
 
 # Main layout with two columns
-chat_col, scratchpad_col = st.columns([7, 3]) if st.session_state.scratchpad_visible else [st.columns([1]), None]
+if st.session_state.scratchpad_visible:
+    chat_col, scratchpad_col = st.columns([7, 3])
+else:
+    chat_col = st.container()
+    scratchpad_col = None
 
 # Chat interface
 with chat_col:
@@ -369,7 +373,7 @@ with chat_col:
         toggle_scratchpad()
 
 # Scratchpad section in right column
-if st.session_state.scratchpad_visible and scratchpad_col:
+if st.session_state.scratchpad_visible and scratchpad_col is not None:
     with scratchpad_col:
         st.header("Scratchpad")
         
