@@ -75,6 +75,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
 <script>
     // Auto-scroll function to keep messages at the bottom
     function scrollToBottom() {
