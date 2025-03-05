@@ -23,21 +23,60 @@ st.set_page_config(
 # Styles - updated for fixed chat input and scrollable message pane
 st.markdown("""
 <style>
-    .main .block-container {
-        padding-top: 1rem;
-        max-width: 100%;
-    }
-    .stTextArea textarea {min-height: 100px;}
-    
+.main .block-container {
+    padding-top: 1rem;
+    max-width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* Make sure the chat container fills the space */
 .chat-outer-container {
     display: flex;
     flex-direction: column;
-    height: 70vh; /* Reduced from 85vh to 70vh */
+    height: 70vh;
     margin-bottom: 1rem;
     border-radius: 8px;
     background-color: rgba(40, 40, 40, 0.2);
     overflow: hidden;
+    width: 100%; /* Make sure it takes full width */
 }
+
+/* Fix the layout of columns */
+[data-testid="column"] {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Make sure there's no gap between sidebar and main content */
+[data-testid="stSidebar"] {
+    margin-right: 0 !important;
+}
+
+/* Fill any empty space in the chat panel */
+.chat-panel {
+    width: 100%;
+    padding: 0;
+}
+
+/* Ensure stAppViewContainer takes up the full width */
+[data-testid="stAppViewContainer"] > section {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Streamlit container tweaks to avoid wasted space */
+.stChatInputContainer {
+    padding-bottom: 10px !important;
+    padding-top: 5px !important;
+}
+
+/* Add this to ensure proper flex layout */
+.row-widget.stChatInput {
+    flex: 1;
+    width: 100%;
+}
+
 
 /* Make sure messages stay at the bottom when few messages */
 .messages-scroll-container {
@@ -557,75 +596,79 @@ else:
 with chat_col:
     st.subheader("Chat with Claude")
     
-    # Create a fixed layout for chat with message history in a scrollable container
-    st.markdown('<div class="chat-outer-container">', unsafe_allow_html=True)
+    # Create a container for the entire chat area
+    chat_container = st.container()
     
-    # Scrollable messages container
-    st.markdown('<div class="messages-scroll-container">', unsafe_allow_html=True)
-    
-    # Display messages
-    for msg in st.session_state.messages:
-        if msg["role"] == "user":
-            st.markdown(f"""
-                <div class="chat-message user-message">
-                    <p><strong>You:</strong></p>
-                    <p>{msg["content"]}</p>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-                <div class="chat-message assistant-message">
-                    <p><strong>Claude:</strong></p>
-                </div>
-            """, unsafe_allow_html=True)
-            st.write(msg["content"])
-    
-    # Add an empty div at the bottom to allow auto-scrolling
-    st.markdown('<div id="auto-scroll-anchor"></div>', unsafe_allow_html=True)
-    
-    # Close the messages container
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Fixed input container at the bottom
-    st.markdown('<div class="chat-input-fixed-container">', unsafe_allow_html=True)
-    
-    # Toggle button for scratchpad
-    if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
-        toggle_scratchpad()
-    
-    # File uploader with drag & drop support
-    st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
-    st.markdown('<div class="file-attachment-icon">📎</div>', unsafe_allow_html=True)
-    
-    uploaded_files = st.file_uploader("", 
-                                      accept_multiple_files=True, 
-                                      type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"],
-                                      label_visibility="collapsed")
-    
-    # Process uploaded files
-    active_file_ids = []
-    if uploaded_files:
-        file_display = st.empty()
-        with file_display.container():
-            # Display uploaded files as chips
-            file_chips_html = '<div style="margin-bottom: 10px;">'
-            
-            for uploaded_file in uploaded_files:
-                file_id = handle_uploaded_file(uploaded_file)
-                if file_id:
-                    active_file_ids.append(file_id)
-                    file_data = st.session_state.file_buffer[file_id]
-                    file_chips_html += f'<span class="file-chip">{file_data["name"]}</span>'
-            
-            file_chips_html += '</div>'
-            st.markdown(file_chips_html, unsafe_allow_html=True)
-    
-    # Chat input
-    user_input = st.chat_input("Message Claude...")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
+    with chat_container:
+        # Create a fixed layout for chat with message history in a scrollable container
+        st.markdown('<div class="chat-outer-container">', unsafe_allow_html=True)
+        
+        # Scrollable messages container
+        st.markdown('<div class="messages-scroll-container">', unsafe_allow_html=True)
+        
+        # Display messages
+        for msg in st.session_state.messages:
+            if msg["role"] == "user":
+                st.markdown(f"""
+                    <div class="chat-message user-message">
+                        <p><strong>You:</strong></p>
+                        <p>{msg["content"]}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                    <div class="chat-message assistant-message">
+                        <p><strong>Claude:</strong></p>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.write(msg["content"])
+        
+        # Add an empty div at the bottom to allow auto-scrolling
+        st.markdown('<div id="auto-scroll-anchor"></div>', unsafe_allow_html=True)
+        
+        # Close the messages container
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Fixed input container at the bottom
+        st.markdown('<div class="chat-input-fixed-container">', unsafe_allow_html=True)
+        
+        # Toggle button for scratchpad
+        if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
+            toggle_scratchpad()
+        
+        # File uploader with drag & drop support
+        st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
+        st.markdown('<div class="file-attachment-icon">📎</div>', unsafe_allow_html=True)
+        
+        uploaded_files = st.file_uploader("", 
+                                        accept_multiple_files=True, 
+                                        type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"],
+                                        label_visibility="collapsed")
+        
+        # Process uploaded files
+        active_file_ids = []
+        if uploaded_files:
+            file_display = st.empty()
+            with file_display.container():
+                # Display uploaded files as chips
+                file_chips_html = '<div style="margin-bottom: 10px;">'
+                
+                for uploaded_file in uploaded_files:
+                    file_id = handle_uploaded_file(uploaded_file)
+                    if file_id:
+                        active_file_ids.append(file_id)
+                        file_data = st.session_state.file_buffer[file_id]
+                        file_chips_html += f'<span class="file-chip">{file_data["name"]}</span>'
+                
+                file_chips_html += '</div>'
+                st.markdown(file_chips_html, unsafe_allow_html=True)
+        
+        # Chat input
+        user_input = st.chat_input("Message Claude...")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
 # Process user input
 if user_input:
     # Add message to UI display
