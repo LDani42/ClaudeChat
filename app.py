@@ -27,48 +27,89 @@ st.markdown("""
 <style>
     .main .block-container {padding-top: 1rem;}
     .stTextArea textarea {min-height: 100px;}
-    .scratchpad {
-        background-color: #f0f2f6;
-        border-radius: 0.5rem;
-        padding: 1rem;
+    
+    /* Chat container styling */
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 120px);
+    }
+    
+    .messages-container {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding-right: 10px;
         margin-bottom: 1rem;
     }
+    
+    .chat-input-container {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--background-color);
+        padding: 1rem 0;
+        border-top: 1px solid rgba(100, 100, 100, 0.2);
+    }
+    
+    /* Message styling */
     .chat-message {
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 0.75rem;
         max-width: 90%;
     }
+    
+    /* Dark mode friendly colors */
     .user-message {
-        background-color: #e6f7ff;
+        background-color: #2a4b8d;
         margin-left: auto;
-        color: #333333 !important; /* Force dark text for user messages */
+        color: #ffffff !important;
     }
+    
     .assistant-message {
-        background-color: #f0f2f6;
+        background-color: #2d3748;
         margin-right: auto;
-        color: #333333 !important; /* Force dark text for assistant messages */
+        color: #ffffff !important;
     }
-    h1, h2, h3 {margin-top: 0;}
+    
+    /* File upload styling */
     .file-upload {
         border: 2px dashed #ccc;
         border-radius: 5px;
         padding: 10px;
         text-align: center;
     }
-    /* Split screen layout */
-    .chat-container {
-        display: flex;
-        flex-direction: row;
-        width: 100%;
+    
+    .file-attachment-icon {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        font-size: 20px;
+        cursor: pointer;
+        color: rgba(180, 180, 180, 0.8);
+        z-index: 100;
     }
+    
+    /* File chips styling */
+    .file-chip {
+        display: inline-block;
+        background-color: rgba(100, 100, 100, 0.3);
+        border-radius: 16px;
+        padding: 4px 12px;
+        margin: 4px;
+        font-size: 12px;
+    }
+    
+    /* Split screen layout */
     .chat-panel {
         flex: 7;
         padding-right: 1rem;
+        display: flex;
+        flex-direction: column;
     }
+    
     .scratchpad-panel {
         flex: 3;
-        background-color: rgba(240, 242, 246, 0.1);
+        background-color: rgba(40, 40, 40, 0.2);
         border-radius: 0.5rem;
         padding: 1rem;
         height: calc(100vh - 80px);
@@ -76,11 +117,21 @@ st.markdown("""
         position: sticky;
         top: 0;
     }
+    
     .collapse-button {
         position: absolute;
         top: 10px;
         right: 10px;
         z-index: 1000;
+    }
+    
+    /* Other styling */
+    h1, h2, h3 {margin-top: 0;}
+    
+    /* Streamlit component overrides */
+    .stChatInputContainer {
+        padding-bottom: 20px;
+        padding-top: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -296,100 +347,125 @@ else:
 # Chat interface
 with chat_col:
     st.subheader("Chat with Claude")
-
-    # File uploader
-    uploaded_files = st.file_uploader("Upload files", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"])
-    active_file_ids = []
-
-    # Display uploaded files as chips
-    if uploaded_files:
-        file_cols = st.columns(4)
-        for i, uploaded_file in enumerate(uploaded_files):
-            file_id = handle_uploaded_file(uploaded_file)
-            if file_id:
-                active_file_ids.append(file_id)
-                with file_cols[i % 4]:
-                    # Display thumbnails for images
-                    file_data = st.session_state.file_buffer[file_id]
-                    if file_data['type'].startswith('image/') and file_data['display_data']:
-                        st.image(file_data['display_data'], caption=file_data['name'], width=100)
-                    else:
-                        st.code(f"📄 {file_data['name']}", language=None)
-
-    # Chat input
-    user_input = st.chat_input("Message Claude...")
-
-    # Process user input
-    if user_input:
-        # Create message for UI display
-        st.session_state.messages.append({"role": "user", "content": user_input})
+    
+    # Create a container for the chat interface with message history
+    chat_container = st.container()
+    with chat_container:
+        # Create a container for messages with scrolling
+        messages_container = st.container()
         
-        # Create message for Claude API with file attachments
-        claude_message = create_claude_message(user_input, active_file_ids)
+        # Create a container for the input at the bottom
+        input_container = st.container()
         
-        # Prepare messages for API
-        api_messages = [m for m in st.session_state.messages if m["role"] != "system"]
-        # Replace the last user message with the one that includes files
-        if api_messages and api_messages[-1]["role"] == "user":
-            api_messages[-1] = claude_message
+        # Display messages in the messages container
+        with messages_container:
+            for msg in st.session_state.messages:
+                if msg["role"] == "user":
+                    st.markdown(f"""
+                        <div class="chat-message user-message">
+                            <p><strong>You:</strong></p>
+                            <p>{msg["content"]}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                        <div class="chat-message assistant-message">
+                            <p><strong>Claude:</strong></p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    st.write(msg["content"])
         
-        # Call Claude API
-        with st.status("Claude is thinking..."):
-            response = query_claude(
-                api_messages,
-                selected_model,
-                system_prompt,
-                temperature,
-                max_tokens
-            )
-        
-        if response:
-            assistant_message = response.content[0].text
-            st.session_state.messages.append({"role": "assistant", "content": assistant_message})
+        # File upload and input at the bottom
+        with input_container:
+            st.markdown('<div class="chat-input-container">', unsafe_allow_html=True)
             
-            # Extract code blocks and add to scratchpad
-            code_blocks = extract_code_blocks(assistant_message)
-            for i, block in enumerate(code_blocks):
-                name = f"code_snippet_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
-                add_to_scratchpad(name, "code", block)
-                st.info(f"Added code snippet to scratchpad: {name}")
+            # Toggle button for scratchpad
+            if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
+                toggle_scratchpad()
             
-            # Extract tables and add to scratchpad
-            tables = extract_tables(assistant_message)
-            for i, table in enumerate(tables):
-                name = f"table_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
-                add_to_scratchpad(name, "table", table)
-                st.info(f"Added table to scratchpad: {name}")
+            # File uploader with drag & drop support
+            st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
+            st.markdown('<div class="file-attachment-icon">📎</div>', unsafe_allow_html=True)
+            
+            uploaded_files = st.file_uploader("", 
+                                             accept_multiple_files=True, 
+                                             type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"],
+                                             label_visibility="collapsed")
+            
+            # Process uploaded files
+            active_file_ids = []
+            if uploaded_files:
+                file_display = st.empty()
+                with file_display.container():
+                    # Display uploaded files as chips
+                    file_chips_html = '<div style="margin-bottom: 10px;">'
+                    
+                    for uploaded_file in uploaded_files:
+                        file_id = handle_uploaded_file(uploaded_file)
+                        if file_id:
+                            active_file_ids.append(file_id)
+                            file_data = st.session_state.file_buffer[file_id]
+                            file_chips_html += f'<span class="file-chip">{file_data["name"]}</span>'
+                    
+                    file_chips_html += '</div>'
+                    st.markdown(file_chips_html, unsafe_allow_html=True)
+            
+            # Chat input
+            user_input = st.chat_input("Message Claude...")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Process user input
+            if user_input:
+                # Create message for UI display
+                st.session_state.messages.append({"role": "user", "content": user_input})
                 
-            # Also add the entire response as a note
-            if len(assistant_message) > 0:
-                note_name = f"note_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                add_to_scratchpad(note_name, "text", assistant_message)
-                st.info(f"Added assistant response to scratchpad: {note_name}")
-
-    # Display chat messages
-    for msg in st.session_state.messages:
-        message_container = st.container()
-        
-        with message_container:
-            if msg["role"] == "user":
-                st.markdown(f"""
-                    <div class="chat-message user-message">
-                        <p><strong>You:</strong></p>
-                        <p>{msg["content"]}</p>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                    <div class="chat-message assistant-message">
-                        <p><strong>Claude:</strong></p>
-                    </div>
-                """, unsafe_allow_html=True)
-                st.write(msg["content"])
-
-    # Toggle button for scratchpad
-    if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
-        toggle_scratchpad()
+                # Create message for Claude API with file attachments
+                claude_message = create_claude_message(user_input, active_file_ids)
+                
+                # Prepare messages for API
+                api_messages = [m for m in st.session_state.messages if m["role"] != "system"]
+                # Replace the last user message with the one that includes files
+                if api_messages and api_messages[-1]["role"] == "user":
+                    api_messages[-1] = claude_message
+                
+                # Call Claude API
+                with st.status("Claude is thinking..."):
+                    response = query_claude(
+                        api_messages,
+                        selected_model,
+                        system_prompt,
+                        temperature,
+                        max_tokens
+                    )
+                
+                if response:
+                    assistant_message = response.content[0].text
+                    st.session_state.messages.append({"role": "assistant", "content": assistant_message})
+                    
+                    # Extract code blocks and add to scratchpad
+                    code_blocks = extract_code_blocks(assistant_message)
+                    for i, block in enumerate(code_blocks):
+                        name = f"code_snippet_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
+                        add_to_scratchpad(name, "code", block)
+                        st.info(f"Added code snippet to scratchpad: {name}")
+                    
+                    # Extract tables and add to scratchpad
+                    tables = extract_tables(assistant_message)
+                    for i, table in enumerate(tables):
+                        name = f"table_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
+                        add_to_scratchpad(name, "table", table)
+                        st.info(f"Added table to scratchpad: {name}")
+                        
+                    # Also add the entire response as a note
+                    if len(assistant_message) > 0:
+                        note_name = f"note_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                        add_to_scratchpad(note_name, "text", assistant_message)
+                        st.info(f"Added assistant response to scratchpad: {note_name}")
+                    
+                # Rerun to update the UI
+                st.rerun()
 
 # Scratchpad section in right column
 if st.session_state.scratchpad_visible and scratchpad_col is not None:
