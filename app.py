@@ -1,4 +1,112 @@
-import streamlit as st
+# Function to create and save charts based on data
+def create_chart(data, chart_type):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import io
+    from datetime import datetime
+    
+    plt.figure(figsize=(10, 6))
+    
+    try:
+        if chart_type == "Line Chart":
+            plt.figure(figsize=(10, 6))
+            for column in data.select_dtypes(include=['int64', 'float64']).columns:
+                if column != 'date':
+                    plt.plot(data['date'] if 'date' in data.columns else range(len(data)), 
+                             data[column], label=column)
+            plt.legend()
+            plt.title("Line Chart")
+            plt.xlabel("Date" if 'date' in data.columns else "Index")
+            plt.ylabel("Value")
+            plt.grid(True, linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            
+        elif chart_type == "Bar Chart":
+            # Use the first categorical column for grouping if available
+            categorical_cols = data.select_dtypes(include=['object']).columns
+            if len(categorical_cols) > 0:
+                category_col = categorical_cols[0]
+                numeric_cols = data.select_dtypes(include=['int64', 'float64']).columns
+                if len(numeric_cols) > 0:
+                    value_col = numeric_cols[0]
+                    grouped_data = data.groupby(category_col)[value_col].mean().reset_index()
+                    plt.bar(grouped_data[category_col], grouped_data[value_col])
+                    plt.title(f"Average {value_col} by {category_col}")
+                    plt.xlabel(category_col)
+                    plt.ylabel(f"Average {value_col}")
+            else:
+                # If no categorical column, use the first numeric column
+                numeric_cols = data.select_dtypes(include=['int64', 'float64']).columns
+                if len(numeric_cols) > 0:
+                    plt.bar(range(len(data)), data[numeric_cols[0]])
+                    plt.title(f"Bar Chart of {numeric_cols[0]}")
+                    plt.xlabel("Index")
+                    plt.ylabel(numeric_cols[0])
+            
+        elif chart_type == "Scatter Plot":
+            numeric_cols = data.select_dtypes(include=['int64', 'float64']).columns
+            if len(numeric_cols) >= 2:
+                x_col, y_col = numeric_cols[0], numeric_cols[1]
+                categorical_cols = data.select_dtypes(include=['object']).columns
+                
+                if len(categorical_cols) > 0:
+                    # Color by category if available
+                    category_col = categorical_cols[0]
+                    categories = data[category_col].unique()
+                    for category in categories:
+                        subset = data[data[category_col] == category]
+                        plt.scatter(subset[x_col], subset[y_col], label=category, alpha=0.7)
+                    plt.legend()
+                else:
+                    plt.scatter(data[x_col], data[y_col], alpha=0.7)
+                
+                plt.title(f"Scatter Plot: {y_col} vs {x_col}")
+                plt.xlabel(x_col)
+                plt.ylabel(y_col)
+                plt.grid(True, linestyle='--', alpha=0.3)
+            
+        elif chart_type == "Pie Chart":
+            categorical_cols = data.select_dtypes(include=['object']).columns
+            if len(categorical_cols) > 0:
+                category_col = categorical_cols[0]
+                count_data = data[category_col].value_counts()
+                plt.pie(count_data, labels=count_data.index, autopct='%1.1f%%', 
+                        shadow=True, startangle=90)
+                plt.axis('equal')
+                plt.title(f"Distribution of {category_col}")
+            
+        elif chart_type == "Heatmap":
+            numeric_data = data.select_dtypes(include=['int64', 'float64'])
+            if not numeric_data.empty:
+                corr = numeric_data.corr()
+                sns.heatmap(corr, annot=True, cmap='coolwarm', linewidths=0.5)
+                plt.title("Correlation Heatmap")
+                plt.tight_layout()
+        
+        # Save the figure to a BytesIO object
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        
+        # Add to scratchpad
+        chart_name = f"chart_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        # Convert to base64 for storage
+        import base64
+        img_str = base64.b64encode(buf.read()).decode('utf-8')
+        
+        add_to_scratchpad(chart_name, "chart", {
+            "type": chart_type,
+            "image_data": img_str,
+            "description": f"{chart_type} created on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        })
+        
+        st.success(f"Chart '{chart_name}' added to scratchpad")
+        return True
+        
+    except Exception as e:
+        st.error(f"Error creating chart: {str(e)}")
+        return Falseimport streamlit as st
 import anthropic
 import os
 import json
@@ -22,32 +130,41 @@ st.set_page_config(
 # Determine if dark mode is enabled
 is_dark_mode = st.experimental_get_query_params().get("theme", ["light"])[0] == "dark"
 
-# Styles - updated for dark mode compatibility
+# Styles - updated for fixed chat input and scrollable message pane
 st.markdown("""
 <style>
-    .main .block-container {padding-top: 1rem;}
+    .main .block-container {
+        padding-top: 1rem;
+        max-width: 100%;
+    }
     .stTextArea textarea {min-height: 100px;}
     
-    /* Chat container styling */
-    .chat-container {
+    /* Fixed layout for chat */
+    .chat-outer-container {
         display: flex;
         flex-direction: column;
-        height: calc(100vh - 120px);
+        height: 85vh;
+        margin-bottom: 1rem;
+        border-radius: 8px;
+        background-color: rgba(40, 40, 40, 0.2);
+        overflow: hidden;
     }
     
-    .messages-container {
+    .messages-scroll-container {
         flex-grow: 1;
         overflow-y: auto;
-        padding-right: 10px;
-        margin-bottom: 1rem;
+        padding: 1rem;
+        scroll-behavior: smooth;
     }
     
-    .chat-input-container {
+    .chat-input-fixed-container {
         position: sticky;
         bottom: 0;
-        background-color: var(--background-color);
-        padding: 1rem 0;
+        background-color: rgba(30, 30, 30, 0.7);
+        backdrop-filter: blur(10px);
+        padding: 1rem;
         border-top: 1px solid rgba(100, 100, 100, 0.2);
+        z-index: 100;
     }
     
     /* Message styling */
@@ -56,6 +173,7 @@ st.markdown("""
         border-radius: 0.5rem;
         margin-bottom: 0.75rem;
         max-width: 90%;
+        word-wrap: break-word;
     }
     
     /* Dark mode friendly colors */
@@ -103,8 +221,6 @@ st.markdown("""
     .chat-panel {
         flex: 7;
         padding-right: 1rem;
-        display: flex;
-        flex-direction: column;
     }
     
     .scratchpad-panel {
@@ -125,6 +241,14 @@ st.markdown("""
         z-index: 1000;
     }
     
+    /* Chart container */
+    .chart-container {
+        background-color: rgba(40, 40, 40, 0.2);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
     /* Other styling */
     h1, h2, h3 {margin-top: 0;}
     
@@ -133,7 +257,36 @@ st.markdown("""
         padding-bottom: 20px;
         padding-top: 10px;
     }
+    
+    /* Auto-scrolling support */
+    #auto-scroll-anchor {
+        float: left;
+        clear: both;
+        height: 0;
+    }
 </style>
+
+<script>
+    // Auto-scroll function to keep messages at the bottom
+    function scrollToBottom() {
+        const messagesContainer = document.querySelector('.messages-scroll-container');
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
+    
+    // Call on load and add mutation observer to scroll when new messages are added
+    document.addEventListener('DOMContentLoaded', function() {
+        scrollToBottom();
+        
+        // Observe for changes to scroll when new content is added
+        const targetNode = document.querySelector('.messages-scroll-container');
+        if (targetNode) {
+            const observer = new MutationObserver(scrollToBottom);
+            observer.observe(targetNode, { childList: true, subtree: true });
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
 
 # Initialize session state
@@ -149,6 +302,8 @@ if 'api_key' not in st.session_state:
     st.session_state.api_key = ""
 if 'scratchpad_visible' not in st.session_state:
     st.session_state.scratchpad_visible = True
+if 'chart_data' not in st.session_state:
+    st.session_state.chart_data = None
 
 # Sidebar settings
 with st.sidebar:
@@ -182,10 +337,51 @@ with st.sidebar:
     # Max token settings
     max_tokens = st.slider("Max Tokens", min_value=100, max_value=200000, value=4000, step=100)
 
-    # Clear chat button
-    if st.button("Clear Chat"):
-        st.session_state.messages = []
-        st.rerun()
+    # Reset chat button (keeps scratchpad)
+    st.subheader("Chat Controls")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Reset Chat", help="Clear chat messages but keep scratchpad"):
+            st.session_state.messages = []
+            st.rerun()
+    
+    with col2:
+        if st.button("Clear All", help="Clear both chat and scratchpad"):
+            st.session_state.messages = []
+            st.session_state.scratchpad = {}
+            st.rerun()
+            
+    # Visualization controls
+    st.subheader("Visualization")
+    
+    # Create a chart with sample data
+    if st.button("Create Sample Chart", help="Create a sample chart to test visualization"):
+        import pandas as pd
+        import numpy as np
+        
+        # Generate sample data
+        dates = pd.date_range(start='2023-01-01', periods=30, freq='D')
+        data = {
+            'date': dates,
+            'value1': np.random.randint(10, 100, size=30),
+            'value2': np.random.randint(20, 80, size=30),
+            'category': np.random.choice(['A', 'B', 'C'], size=30)
+        }
+        
+        st.session_state.chart_data = pd.DataFrame(data)
+        st.success("Sample data created! Use 'Visualize Data' to create charts.")
+    
+    # Chart type selector (only show if data exists)
+    if st.session_state.chart_data is not None:
+        chart_type = st.selectbox(
+            "Chart Type", 
+            ["Line Chart", "Bar Chart", "Scatter Plot", "Pie Chart", "Heatmap"],
+            index=0
+        )
+        
+        if st.button("Visualize Data"):
+            create_chart(st.session_state.chart_data, chart_type)
 
 # Function to handle file uploads and encode them
 def handle_uploaded_file(uploaded_file):
@@ -348,104 +544,125 @@ else:
 with chat_col:
     st.subheader("Chat with Claude")
     
-    # Create a container for the chat interface with message history
-    chat_container = st.container()
-    with chat_container:
-        # Create a container for messages with scrolling
-        messages_container = st.container()
+    # Create a fixed layout for chat with message history in a scrollable container
+    st.markdown('<div class="chat-outer-container">', unsafe_allow_html=True)
+    
+    # Scrollable messages container
+    st.markdown('<div class="messages-scroll-container">', unsafe_allow_html=True)
+    
+    # Display messages
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            st.markdown(f"""
+                <div class="chat-message user-message">
+                    <p><strong>You:</strong></p>
+                    <p>{msg["content"]}</p>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+                <div class="chat-message assistant-message">
+                    <p><strong>Claude:</strong></p>
+                </div>
+            """, unsafe_allow_html=True)
+            st.write(msg["content"])
+    
+    # Add an empty div at the bottom to allow auto-scrolling
+    st.markdown('<div id="auto-scroll-anchor"></div>', unsafe_allow_html=True)
+    
+    # Close the messages container
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Fixed input container at the bottom
+    st.markdown('<div class="chat-input-fixed-container">', unsafe_allow_html=True)
+    
+    # Toggle button for scratchpad
+    if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
+        toggle_scratchpad()
+    
+    # File uploader with drag & drop support
+    st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
+    st.markdown('<div class="file-attachment-icon">📎</div>', unsafe_allow_html=True)
+    
+    uploaded_files = st.file_uploader("", 
+                                      accept_multiple_files=True, 
+                                      type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"],
+                                      label_visibility="collapsed")
+    
+    # Process uploaded files
+    active_file_ids = []
+    if uploaded_files:
+        file_display = st.empty()
+        with file_display.container():
+            # Display uploaded files as chips
+            file_chips_html = '<div style="margin-bottom: 10px;">'
+            
+            for uploaded_file in uploaded_files:
+                file_id = handle_uploaded_file(uploaded_file)
+                if file_id:
+                    active_file_ids.append(file_id)
+                    file_data = st.session_state.file_buffer[file_id]
+                    file_chips_html += f'<span class="file-chip">{file_data["name"]}</span>'
+            
+            file_chips_html += '</div>'
+            st.markdown(file_chips_html, unsafe_allow_html=True)
+    
+    # Chat input
+    user_input = st.chat_input("Message Claude...")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Process user input
+    if user_input:
+        # Create message for UI display
+        st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # Create a container for the input at the bottom
-        input_container = st.container()
+        # Create message for Claude API with file attachments
+        claude_message = create_claude_message(user_input, active_file_ids)
         
-        # Display messages in the messages container
-        with messages_container:
-            for msg in st.session_state.messages:
-                if msg["role"] == "user":
-                    st.markdown(f"""
-                        <div class="chat-message user-message">
-                            <p><strong>You:</strong></p>
-                            <p>{msg["content"]}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                        <div class="chat-message assistant-message">
-                            <p><strong>Claude:</strong></p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    st.write(msg["content"])
+        # Prepare messages for API
+        api_messages = [m for m in st.session_state.messages if m["role"] != "system"]
+        # Replace the last user message with the one that includes files
+        if api_messages and api_messages[-1]["role"] == "user":
+            api_messages[-1] = claude_message
         
-        # File upload and input at the bottom
-        with input_container:
-            st.markdown('<div class="chat-input-container">', unsafe_allow_html=True)
+        # Call Claude API
+        with st.status("Claude is thinking..."):
+            response = query_claude(
+                api_messages,
+                selected_model,
+                system_prompt,
+                temperature,
+                max_tokens
+            )
+        
+        if response:
+            assistant_message = response.content[0].text
+            st.session_state.messages.append({"role": "assistant", "content": assistant_message})
             
-            # Toggle button for scratchpad
-            if st.button("Toggle Scratchpad" + (" ▶" if st.session_state.scratchpad_visible else " ◀")):
-                toggle_scratchpad()
+            # Extract code blocks and add to scratchpad
+            code_blocks = extract_code_blocks(assistant_message)
+            for i, block in enumerate(code_blocks):
+                name = f"code_snippet_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
+                add_to_scratchpad(name, "code", block)
+                st.info(f"Added code snippet to scratchpad: {name}")
             
-            # File uploader with drag & drop support
-            st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
-            st.markdown('<div class="file-attachment-icon">📎</div>', unsafe_allow_html=True)
-            
-            uploaded_files = st.file_uploader("", 
-                                             accept_multiple_files=True, 
-                                             type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "json", "xlsx"],
-                                             label_visibility="collapsed")
-            
-            # Process uploaded files
-            active_file_ids = []
-            if uploaded_files:
-                file_display = st.empty()
-                with file_display.container():
-                    # Display uploaded files as chips
-                    file_chips_html = '<div style="margin-bottom: 10px;">'
-                    
-                    for uploaded_file in uploaded_files:
-                        file_id = handle_uploaded_file(uploaded_file)
-                        if file_id:
-                            active_file_ids.append(file_id)
-                            file_data = st.session_state.file_buffer[file_id]
-                            file_chips_html += f'<span class="file-chip">{file_data["name"]}</span>'
-                    
-                    file_chips_html += '</div>'
-                    st.markdown(file_chips_html, unsafe_allow_html=True)
-            
-            # Chat input
-            user_input = st.chat_input("Message Claude...")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Process user input
-            if user_input:
-                # Create message for UI display
-                st.session_state.messages.append({"role": "user", "content": user_input})
+            # Extract tables and add to scratchpad
+            tables = extract_tables(assistant_message)
+            for i, table in enumerate(tables):
+                name = f"table_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
+                add_to_scratchpad(name, "table", table)
+                st.info(f"Added table to scratchpad: {name}")
                 
-                # Create message for Claude API with file attachments
-                claude_message = create_claude_message(user_input, active_file_ids)
-                
-                # Prepare messages for API
-                api_messages = [m for m in st.session_state.messages if m["role"] != "system"]
-                # Replace the last user message with the one that includes files
-                if api_messages and api_messages[-1]["role"] == "user":
-                    api_messages[-1] = claude_message
-                
-                # Call Claude API
-                with st.status("Claude is thinking..."):
-                    response = query_claude(
-                        api_messages,
-                        selected_model,
-                        system_prompt,
-                        temperature,
-                        max_tokens
-                    )
-                
-                if response:
-                    assistant_message = response.content[0].text
-                    st.session_state.messages.append({"role": "assistant", "content": assistant_message})
-                    
-                    # Extract code blocks and add to scratchpad
-                    code_blocks = extract_code_blocks(assistant_message)
+            # Also add the entire response as a note
+            if len(assistant_message) > 0:
+                note_name = f"note_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                add_to_scratchpad(note_name, "text", assistant_message)
+                st.info(f"Added assistant response to scratchpad: {note_name}")
+            
+        # Rerun to update the UI
+        st.rerun()code_blocks(assistant_message)
                     for i, block in enumerate(code_blocks):
                         name = f"code_snippet_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}"
                         add_to_scratchpad(name, "code", block)
@@ -475,7 +692,7 @@ if st.session_state.scratchpad_visible and scratchpad_col is not None:
         # Add new item manually
         with st.expander("Add New Item", expanded=False):
             item_name = st.text_input("Item Name", key="new_item_name")
-            item_type = st.selectbox("Content Type", ["text", "code", "table"])
+            item_type = st.selectbox("Content Type", ["text", "code", "table", "chart"])
             
             if item_type == "code":
                 language = st.selectbox("Language", ["python", "javascript", "html", "css", "sql", "bash", "text"])
@@ -490,12 +707,38 @@ if st.session_state.scratchpad_visible and scratchpad_col is not None:
                     if item_name:
                         add_to_scratchpad(item_name, "table", table_markdown)
                         st.success(f"Saved '{item_name}' to scratchpad")
+            elif item_type == "chart":
+                st.info("To create charts, use the visualization tools in the sidebar.")
             else:
                 text = st.text_area("Text Content", height=150)
                 if st.button("Save Text"):
                     if item_name:
                         add_to_scratchpad(item_name, "text", text)
                         st.success(f"Saved '{item_name}' to scratchpad")
+        
+        # Upload CSV for visualization
+        with st.expander("Import Data for Visualization", expanded=False):
+            uploaded_csv = st.file_uploader("Upload CSV file", type=["csv"], key="data_csv")
+            if uploaded_csv:
+                try:
+                    import pandas as pd
+                    data = pd.read_csv(uploaded_csv)
+                    st.session_state.chart_data = data
+                    st.success(f"Successfully imported {uploaded_csv.name} with {len(data)} rows and {len(data.columns)} columns.")
+                    
+                    if st.button("Preview Data"):
+                        st.dataframe(data.head())
+                        
+                    chart_type = st.selectbox(
+                        "Chart Type", 
+                        ["Line Chart", "Bar Chart", "Scatter Plot", "Pie Chart", "Heatmap"],
+                        key="chart_type_selector"
+                    )
+                    
+                    if st.button("Create Visualization"):
+                        create_chart(data, chart_type)
+                except Exception as e:
+                    st.error(f"Error loading CSV: {str(e)}")
         
         # Display scratchpad items
         if not st.session_state.scratchpad:
@@ -504,7 +747,32 @@ if st.session_state.scratchpad_visible and scratchpad_col is not None:
             # Group scratchpad items by type
             code_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "code"}
             table_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "table"}
-            text_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] not in ["code", "table"]}
+            chart_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "chart"}
+            text_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] not in ["code", "table", "chart"]}
+            
+            # Display charts first
+            if chart_items:
+                st.subheader("Charts & Visualizations")
+                for name, item in chart_items.items():
+                    with st.expander(f"{name}"):
+                        # Display the chart image
+                        import base64
+                        from PIL import Image
+                        import io
+                        
+                        try:
+                            image_data = base64.b64decode(item["content"]["image_data"])
+                            image = Image.open(io.BytesIO(image_data))
+                            st.image(image, caption=item["content"]["description"])
+                        except Exception as e:
+                            st.error(f"Error displaying chart: {str(e)}")
+                        
+                        col1, col2 = st.columns([1, 1])
+                        with col2:
+                            if st.button(f"Delete", key=f"delete_chart_{name}"):
+                                del st.session_state.scratchpad[name]
+                                st.success(f"Deleted '{name}'")
+                                st.rerun()
             
             # Display code snippets
             if code_items:
