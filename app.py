@@ -220,8 +220,10 @@ def query_claude(messages, model, system_prompt, temperature, max_tokens):
         return None
     
     try:
+        # Initialize Anthropic client with only the API key
         client = anthropic.Anthropic(api_key=st.session_state.api_key)
         
+        # Call the messages API
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
