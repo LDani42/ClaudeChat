@@ -1,186 +1,3 @@
-# Scratchpad section in right column
-if st.session_state.scratchpad_visible and scratchpad_col is not None:
-    with scratchpad_col:
-        st.header("Scratchpad")
-        
-        # Add new item manually
-        with st.expander("Add New Item", expanded=False):
-            item_name = st.text_input("Item Name", key="new_item_name")
-            item_type = st.selectbox("Content Type", ["text", "code", "table", "chart"])
-            
-            if item_type == "code":
-                language = st.selectbox("Language", ["python", "javascript", "html", "css", "sql", "bash", "text"])
-                code = st.text_area("Code Content", height=150)
-                if st.button("Save Code"):
-                    if item_name:
-                        add_to_scratchpad(item_name, "code", {"language": language, "code": code})
-                        st.success(f"Saved '{item_name}' to scratchpad")
-            elif item_type == "table":
-                table_markdown = st.text_area("Table (Markdown Format)", value="| Column 1 | Column 2 |\n| --- | --- |\n| Data 1 | Data 2 |", height=150)
-                if st.button("Save Table"):
-                    if item_name:
-                        add_to_scratchpad(item_name, "table", table_markdown)
-                        st.success(f"Saved '{item_name}' to scratchpad")
-            elif item_type == "chart":
-                st.info("To create charts, use the visualization tools in the sidebar.")
-            else:
-                text = st.text_area("Text Content", height=150)
-                if st.button("Save Text"):
-                    if item_name:
-                        add_to_scratchpad(item_name, "text", text)
-                        st.success(f"Saved '{item_name}' to scratchpad")
-        
-        # Upload CSV for visualization
-        with st.expander("Import Data for Visualization", expanded=False):
-            uploaded_csv = st.file_uploader("Upload CSV file", type=["csv"], key="data_csv")
-            if uploaded_csv:
-                try:
-                    import pandas as pd
-                    data = pd.read_csv(uploaded_csv)
-                    st.session_state.chart_data = data
-                    st.success(f"Successfully imported {uploaded_csv.name} with {len(data)} rows and {len(data.columns)} columns.")
-                    
-                    if st.button("Preview Data"):
-                        st.dataframe(data.head())
-                        
-                    chart_type = st.selectbox(
-                        "Chart Type", 
-                        ["Line Chart", "Bar Chart", "Scatter Plot", "Pie Chart", "Heatmap"],
-                        key="chart_type_selector"
-                    )
-                    
-                    if st.button("Create Visualization"):
-                        create_chart(data, chart_type)
-                except Exception as e:
-                    st.error(f"Error loading CSV: {str(e)}")
-        
-        # Display scratchpad items
-        if not st.session_state.scratchpad:
-            st.info("Your scratchpad is empty. Chat with Claude to automatically collect useful information here.")
-        else:
-            # Group scratchpad items by type
-            code_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "code"}
-            table_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "table"}
-            chart_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "chart"}
-            text_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] not in ["code", "table", "chart"]}
-            
-            # Display charts first
-            if chart_items:
-                st.subheader("Charts & Visualizations")
-                for name, item in chart_items.items():
-                    with st.expander(f"{name}"):
-                        # Display the chart image
-                        import base64
-                        from PIL import Image
-                        import io
-                        
-                        try:
-                            image_data = base64.b64decode(item["content"]["image_data"])
-                            image = Image.open(io.BytesIO(image_data))
-                            st.image(image, caption=item["content"]["description"])
-                        except Exception as e:
-                            st.error(f"Error displaying chart: {str(e)}")
-                        
-                        col1, col2 = st.columns([1, 1])
-                        with col2:
-                            if st.button(f"Delete", key=f"delete_chart_{name}"):
-                                del st.session_state.scratchpad[name]
-                                st.success(f"Deleted '{name}'")
-                                st.rerun()
-            
-            # Display code snippets
-            if code_items:
-                st.subheader("Code Snippets")
-                for name, item in code_items.items():
-                    with st.expander(f"{name}"):
-                        st.code(item["content"]["code"], language=item["content"]["language"])
-                        col1, col2 = st.columns([1, 1])
-                        with col1:
-                            # Edit button opens edit form
-                            if st.button(f"Edit", key=f"edit_{name}"):
-                                st.session_state.current_scratchpad_item = name
-                                st.session_state["edit_mode"] = True
-                                st.rerun()
-                        with col2:
-                            # Delete button
-                            if st.button(f"Delete", key=f"delete_{name}"):
-                                del st.session_state.scratchpad[name]
-                                st.success(f"Deleted '{name}'")
-                                st.rerun()
-            
-            # Display tables
-            if table_items:
-                st.subheader("Tables")
-                for name, item in table_items.items():
-                    with st.expander(f"{name}"):
-                        st.markdown(item["content"])
-                        col1, col2 = st.columns([1, 1])
-                        with col1:
-                            if st.button(f"Edit", key=f"edit_table_{name}"):
-                                st.session_state.current_scratchpad_item = name
-                                st.session_state["edit_mode"] = True
-                                st.rerun()
-                        with col2:
-                            if st.button(f"Delete", key=f"delete_table_{name}"):
-                                del st.session_state.scratchpad[name]
-                                st.success(f"Deleted '{name}'")
-                                st.rerun()
-            
-            # Display other text content
-            if text_items:
-                st.subheader("Notes")
-                for name, item in text_items.items():
-                    with st.expander(f"{name}"):
-                        st.write(item["content"])
-                        col1, col2 = st.columns([1, 1])
-                        with col1:
-                            if st.button(f"Edit", key=f"edit_text_{name}"):
-                                st.session_state.current_scratchpad_item = name
-                                st.session_state["edit_mode"] = True
-                                st.rerun()
-                        with col2:
-                            if st.button(f"Delete", key=f"delete_text_{name}"):
-                                del st.session_state.scratchpad[name]
-                                st.success(f"Deleted '{name}'")
-                                st.rerun()
-        
-        # Edit mode for selected scratchpad item
-        if "edit_mode" in st.session_state and st.session_state["edit_mode"] and st.session_state.current_scratchpad_item:
-            st.subheader(f"Edit: {st.session_state.current_scratchpad_item}")
-            item = st.session_state.scratchpad[st.session_state.current_scratchpad_item]
-            
-            if item["type"] == "code":
-                language = st.selectbox("Language", ["python", "javascript", "html", "css", "sql", "bash", "text"], 
-                                        index=["python", "javascript", "html", "css", "sql", "bash", "text"].index(item["content"]["language"]))
-                code = st.text_area("Code", value=item["content"]["code"], height=300)
-                if st.button("Update Code"):
-                    st.session_state.scratchpad[st.session_state.current_scratchpad_item]["content"] = {"language": language, "code": code}
-                    st.success("Updated successfully")
-                    st.session_state["edit_mode"] = False
-                    st.rerun()
-            elif item["type"] == "table":
-                table_markdown = st.text_area("Table (Markdown)", value=item["content"], height=300)
-                if st.button("Update Table"):
-                    st.session_state.scratchpad[st.session_state.current_scratchpad_item]["content"] = table_markdown
-                    st.success("Updated successfully")
-                    st.session_state["edit_mode"] = False
-                    st.rerun()
-            else:
-                text = st.text_area("Text", value=item["content"], height=300)
-                if st.button("Update Text"):
-                    st.session_state.scratchpad[st.session_state.current_scratchpad_item]["content"] = text
-                    st.success("Updated successfully")
-                    st.session_state["edit_mode"] = False
-                    st.rerun()
-            
-            if st.button("Cancel"):
-                st.session_state["edit_mode"] = False
-                st.session_state.current_scratchpad_item = None
-                st.rerun()
-
-# Footer
-st.divider()
-st.caption("Custom Claude UI - Built with Streamlit")
 import streamlit as st
 import anthropic
 import os
@@ -202,9 +19,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Determine if dark mode is enabled
-is_dark_mode = st.experimental_get_query_params().get("theme", ["light"])[0] == "dark"
 
 # Styles - updated for fixed chat input and scrollable message pane
 st.markdown("""
@@ -853,3 +667,187 @@ with chat_col:
             
         # Rerun to update the UI
         st.rerun()
+
+# Scratchpad section in right column
+if st.session_state.scratchpad_visible and scratchpad_col is not None:
+    with scratchpad_col:
+        st.header("Scratchpad")
+        
+        # Add new item manually
+        with st.expander("Add New Item", expanded=False):
+            item_name = st.text_input("Item Name", key="new_item_name")
+            item_type = st.selectbox("Content Type", ["text", "code", "table", "chart"])
+            
+            if item_type == "code":
+                language = st.selectbox("Language", ["python", "javascript", "html", "css", "sql", "bash", "text"])
+                code = st.text_area("Code Content", height=150)
+                if st.button("Save Code"):
+                    if item_name:
+                        add_to_scratchpad(item_name, "code", {"language": language, "code": code})
+                        st.success(f"Saved '{item_name}' to scratchpad")
+            elif item_type == "table":
+                table_markdown = st.text_area("Table (Markdown Format)", value="| Column 1 | Column 2 |\n| --- | --- |\n| Data 1 | Data 2 |", height=150)
+                if st.button("Save Table"):
+                    if item_name:
+                        add_to_scratchpad(item_name, "table", table_markdown)
+                        st.success(f"Saved '{item_name}' to scratchpad")
+            elif item_type == "chart":
+                st.info("To create charts, use the visualization tools in the sidebar.")
+            else:
+                text = st.text_area("Text Content", height=150)
+                if st.button("Save Text"):
+                    if item_name:
+                        add_to_scratchpad(item_name, "text", text)
+                        st.success(f"Saved '{item_name}' to scratchpad")
+        
+        # Upload CSV for visualization
+        with st.expander("Import Data for Visualization", expanded=False):
+            uploaded_csv = st.file_uploader("Upload CSV file", type=["csv"], key="data_csv")
+            if uploaded_csv:
+                try:
+                    import pandas as pd
+                    data = pd.read_csv(uploaded_csv)
+                    st.session_state.chart_data = data
+                    st.success(f"Successfully imported {uploaded_csv.name} with {len(data)} rows and {len(data.columns)} columns.")
+                    
+                    if st.button("Preview Data"):
+                        st.dataframe(data.head())
+                        
+                    chart_type = st.selectbox(
+                        "Chart Type", 
+                        ["Line Chart", "Bar Chart", "Scatter Plot", "Pie Chart", "Heatmap"],
+                        key="chart_type_selector"
+                    )
+                    
+                    if st.button("Create Visualization"):
+                        create_chart(data, chart_type)
+                except Exception as e:
+                    st.error(f"Error loading CSV: {str(e)}")
+        
+        # Display scratchpad items
+        if not st.session_state.scratchpad:
+            st.info("Your scratchpad is empty. Chat with Claude to automatically collect useful information here.")
+        else:
+            # Group scratchpad items by type
+            code_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "code"}
+            table_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "table"}
+            chart_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] == "chart"}
+            text_items = {k: v for k, v in st.session_state.scratchpad.items() if v["type"] not in ["code", "table", "chart"]}
+            
+            # Display charts first
+            if chart_items:
+                st.subheader("Charts & Visualizations")
+                for name, item in chart_items.items():
+                    with st.expander(f"{name}"):
+                        # Display the chart image
+                        import base64
+                        from PIL import Image
+                        import io
+                        
+                        try:
+                            image_data = base64.b64decode(item["content"]["image_data"])
+                            image = Image.open(io.BytesIO(image_data))
+                            st.image(image, caption=item["content"]["description"])
+                        except Exception as e:
+                            st.error(f"Error displaying chart: {str(e)}")
+                        
+                        col1, col2 = st.columns([1, 1])
+                        with col2:
+                            if st.button(f"Delete", key=f"delete_chart_{name}"):
+                                del st.session_state.scratchpad[name]
+                                st.success(f"Deleted '{name}'")
+                                st.rerun()
+            
+            # Display code snippets
+            if code_items:
+                st.subheader("Code Snippets")
+                for name, item in code_items.items():
+                    with st.expander(f"{name}"):
+                        st.code(item["content"]["code"], language=item["content"]["language"])
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            # Edit button opens edit form
+                            if st.button(f"Edit", key=f"edit_{name}"):
+                                st.session_state.current_scratchpad_item = name
+                                st.session_state["edit_mode"] = True
+                                st.rerun()
+                        with col2:
+                            # Delete button
+                            if st.button(f"Delete", key=f"delete_{name}"):
+                                del st.session_state.scratchpad[name]
+                                st.success(f"Deleted '{name}'")
+                                st.rerun()
+            
+            # Display tables
+            if table_items:
+                st.subheader("Tables")
+                for name, item in table_items.items():
+                    with st.expander(f"{name}"):
+                        st.markdown(item["content"])
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            if st.button(f"Edit", key=f"edit_table_{name}"):
+                                st.session_state.current_scratchpad_item = name
+                                st.session_state["edit_mode"] = True
+                                st.rerun()
+                        with col2:
+                            if st.button(f"Delete", key=f"delete_table_{name}"):
+                                del st.session_state.scratchpad[name]
+                                st.success(f"Deleted '{name}'")
+                                st.rerun()
+            
+            # Display other text content
+            if text_items:
+                st.subheader("Notes")
+                for name, item in text_items.items():
+                    with st.expander(f"{name}"):
+                        st.write(item["content"])
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            if st.button(f"Edit", key=f"edit_text_{name}"):
+                                st.session_state.current_scratchpad_item = name
+                                st.session_state["edit_mode"] = True
+                                st.rerun()
+                        with col2:
+                            if st.button(f"Delete", key=f"delete_text_{name}"):
+                                del st.session_state.scratchpad[name]
+                                st.success(f"Deleted '{name}'")
+                                st.rerun()
+        
+        # Edit mode for selected scratchpad item
+        if "edit_mode" in st.session_state and st.session_state["edit_mode"] and st.session_state.current_scratchpad_item:
+            st.subheader(f"Edit: {st.session_state.current_scratchpad_item}")
+            item = st.session_state.scratchpad[st.session_state.current_scratchpad_item]
+            
+            if item["type"] == "code":
+                language = st.selectbox("Language", ["python", "javascript", "html", "css", "sql", "bash", "text"], 
+                                        index=["python", "javascript", "html", "css", "sql", "bash", "text"].index(item["content"]["language"]))
+                code = st.text_area("Code", value=item["content"]["code"], height=300)
+                if st.button("Update Code"):
+                    st.session_state.scratchpad[st.session_state.current_scratchpad_item]["content"] = {"language": language, "code": code}
+                    st.success("Updated successfully")
+                    st.session_state["edit_mode"] = False
+                    st.rerun()
+            elif item["type"] == "table":
+                table_markdown = st.text_area("Table (Markdown)", value=item["content"], height=300)
+                if st.button("Update Table"):
+                    st.session_state.scratchpad[st.session_state.current_scratchpad_item]["content"] = table_markdown
+                    st.success("Updated successfully")
+                    st.session_state["edit_mode"] = False
+                    st.rerun()
+            else:
+                text = st.text_area("Text", value=item["content"], height=300)
+                if st.button("Update Text"):
+                    st.session_state.scratchpad[st.session_state.current_scratchpad_item]["content"] = text
+                    st.success("Updated successfully")
+                    st.session_state["edit_mode"] = False
+                    st.rerun()
+            
+            if st.button("Cancel"):
+                st.session_state["edit_mode"] = False
+                st.session_state.current_scratchpad_item = None
+                st.rerun()
+
+# Footer
+st.divider()
+st.caption("Custom Claude UI - Built with Streamlit")
